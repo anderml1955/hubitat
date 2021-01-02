@@ -13,6 +13,7 @@
  *  v1.0.0 - Initial version (2020-04-26)
  *  v1.0.1 - Added health check (2020-12-12)
  *  v1.0.2 - Fix for parsing Eagle 200 summation (2020-12-18)
+ *  v1.0.3 - Added cost (2021-01-01) MLA
  *
  */
 
@@ -23,12 +24,15 @@ metadata {
         capability "Sensor"
 
         command "resetEnergy"
+		// Add cost attribute
+		attribute "cost", "decimal"
     }
 }
 
 preferences {
     input name: "eagleIP", type: "string", title:"<b>Eagle IP Address</b>", description: "<div><i>Please use a static IP.</i></div><br>", required: true
     input name: "reportWatts", type: "bool", title:"<b>Report Power in Watts?</b>", description: "<div><i>Default reporting is in kW. Energy is always in kWh.</i></div><br>", defaultValue: true
+	input name: "kWhCost", type: "decimal", title: "<b>Cost per kWh</b>", description: "<div><i>Enter the cost per kWh</i></div><br>", defaultValue: 0.1062
     input name: "autoResetEnergy", type: "enum", title: "<b>Automatically Reset Energy</b>", description: "<div><i>Reset energy on the specified day every month.</i></div></br>", options: daysOptions(), defaultValue: "Disabled"
     input name: "loggingEnabled", type: "bool", title: "<b>Enable Logging?</b>", description: "<div><i>Automatically disables after 30 minutes.</i></div><br>", defaultValue: false
 }
@@ -101,6 +105,8 @@ void resetEnergy() {
     state.remove("energyStart")
     state.remove("energyStartTimestamp")
     sendEvent(name: "energy", value: 0, unit: "kWh")
+    sendEvent(name: "cost", value: 0, unit: "Dollars")
+
 }
 
 void setNetworkAddress() {
@@ -188,13 +194,22 @@ void parseCurrentSummation(summation) {
         def totalEnergy = deliveredValue - state.energyStart
         // round to 2 decimal places
         totalEnergy = Math.round(totalEnergy * 100) / 100
+        // calculate cost
+        def monthlyCost = totalEnergy * kWhCost
+        // round to 2 decimal places
+        monthlyCost = Math.round(monthlyCost * 100) / 100
+        sendEvent(name: "cost", value: monthlyCost, unit: "Dollars")
+		logDebug "Current monthlyCost: ${monthlyCost}"
         sendEvent(name: "energy", value: totalEnergy, unit: "kWh")
+		logDebug "Current totalEnergy: ${totalEnergy}"
     }
     else {
         // save value
         state.energyStart = deliveredValue
         state.energyStartTimestamp = dateString
         sendEvent(name: "energy", value: 0, unit: "kWh")
+        sendEvent(name: "cost", value: 0, unit: "Dollars")
+		logDebug 'Else save value 0'
     }
 }
 
